@@ -21,6 +21,9 @@ with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
 
 app = Flask(__name__)
 
+# === MEMORY ===
+conversation_memory = {}
+
 # === CALL OPENROUTER ===
 def ask_openrouter(question, history=[]):
     try:
@@ -32,12 +35,14 @@ def ask_openrouter(question, history=[]):
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
         }
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *history,
+            {"role": "user", "content": full_question},
+        ]
         payload = {
             "model": "meta-llama/llama-3-70b-instruct",
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": full_question},
-            ]
+            "messages": messages
         }
         response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
         response.raise_for_status()
@@ -80,7 +85,13 @@ def whatsapp_webhook():
             print("[SKIP] No valid message")
             return jsonify({"status": "no-message"}), 200
 
-        reply = ask_openrouter(message)
+        history = conversation_memory.get(sender_id, [])[-6:]  # до 3 пар (вопрос+ответ)
+        reply = ask_openrouter(message, history)
+
+        history.append({"role": "user", "content": message})
+        history.append({"role": "assistant", "content": reply})
+        conversation_memory[sender_id] = history
+
         send_whatsapp_message(sender_id, reply)
         return jsonify({"status": "ok"}), 200
 
