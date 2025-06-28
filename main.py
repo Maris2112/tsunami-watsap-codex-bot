@@ -14,8 +14,8 @@ SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 BOT_CHAT_ID = os.environ.get("BOT_CHAT_ID")  # Пример: "7775885000@c.us"
-WHATSAPP_INSTANCE_ID = os.getenv("WHATSAPP_INSTANCE_ID")
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
+WHATSAPP_INSTANCE_ID = os.getenv("GREENAPI_INSTANCE_ID")
+WHATSAPP_TOKEN = os.getenv("GREENAPI_TOKEN")
 
 # === Загрузка системного промпта ===
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -148,5 +148,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
-
