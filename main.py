@@ -37,7 +37,7 @@ def ask_openrouter(question, history=[]):
         headers = {
             "Authorization": f"Bearer {api_key_clean}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
+            "HTTP-Referer": "https://tsunami-watsap-codex-bot-production.up.railway.app",  # ✅ исправлено
             "X-Title": "Tsunami WhatsApp Bot"
         }
 
@@ -58,7 +58,7 @@ def ask_openrouter(question, history=[]):
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            data=json.dumps(payload)  # ⚠️ обязательно!
+            data=json.dumps(payload)
         )
 
         print("[DEBUG] OpenRouter response text:", response.text)
