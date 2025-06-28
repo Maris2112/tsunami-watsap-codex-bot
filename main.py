@@ -6,9 +6,10 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
+# ✅ Загрузка переменных окружения из файла .env
 load_dotenv()
 
-# === CONFIG ===
+# ✅ Получение ключей из окружения
 GREENAPI_INSTANCE_ID = os.environ.get("GREENAPI_INSTANCE_ID")
 GREENAPI_TOKEN = os.environ.get("GREENAPI_TOKEN")
 GREENAPI_API_URL = os.environ.get("GREENAPI_API_URL")
@@ -34,24 +35,39 @@ def ask_openrouter(question, history=[]):
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
+            "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
+            "X-Title": "Tsunami WhatsApp Bot"
         }
+
+        print("[DEBUG] Headers sent to OpenRouter:", headers)
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             *history,
             {"role": "user", "content": full_question},
         ]
+
         payload = {
             "model": "meta-llama/llama-3-70b-instruct",
             "messages": messages
         }
-        response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
+
+        response = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers=headers,
+            json=payload
+        )
+
+        print("[DEBUG] OpenRouter response text:", response.text)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
+
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
+        traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
-# === SEND MESSAGE ===
+# === SEND WHATSAPP ===
 def send_whatsapp_message(chat_id, text):
     try:
         url = f"{GREENAPI_API_URL}/waInstance{GREENAPI_INSTANCE_ID}/sendMessage/{GREENAPI_TOKEN}"
@@ -85,7 +101,7 @@ def whatsapp_webhook():
             print("[SKIP] No valid message")
             return jsonify({"status": "no-message"}), 200
 
-        history = conversation_memory.get(sender_id, [])[-6:]  # до 3 пар (вопрос+ответ)
+        history = conversation_memory.get(sender_id, [])[-6:]
         reply = ask_openrouter(message, history)
 
         history.append({"role": "user", "content": message})
@@ -102,7 +118,9 @@ def whatsapp_webhook():
 # === HEALTHCHECK ===
 @app.route("/", methods=["GET"])
 def root():
-    return "TsunamiBot with OpenRouter is running ✅"
+    return "TsunamiBot для WhatsApp + OpenRouter запущен ✅"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
