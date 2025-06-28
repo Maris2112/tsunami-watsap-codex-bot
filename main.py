@@ -32,14 +32,16 @@ def ask_openrouter(question, history=[]):
         now = datetime.now(tz).strftime("%A, %d %B %Y, %H:%M")
         full_question = f"[{now}] {question}"
 
+        api_key_clean = OPENROUTER_API_KEY.strip()
+
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {api_key_clean}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
             "X-Title": "Tsunami WhatsApp Bot"
         }
 
-        print("[DEBUG] Sending request to OpenRouter...")
+        print("[DEBUG] Headers sent to OpenRouter:", headers)
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -48,33 +50,25 @@ def ask_openrouter(question, history=[]):
         ]
 
         payload = {
-            "model": "meta-llama/llama-3-70b-instruct",
+            "model": os.environ.get("OPENROUTER_MODEL", "google/gemini-flash-1.5"),
             "messages": messages
         }
 
+        import json
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            json=payload
+            data=json.dumps(payload)  # ⚠️ обязательно!
         )
 
         print("[DEBUG] OpenRouter response text:", response.text)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
 
-    except requests.exceptions.HTTPError as e:
-        if response.status_code == 401:
-            print("[ERROR] 401 Unauthorized – Проверь OPENROUTER_API_KEY")
-        else:
-            print("[ERROR] HTTP Error:", e)
-        traceback.print_exc()
-        return "⚠️ Ошибка ИИ. Попробуй позже."
-
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
         traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
-
 
 # === SEND WHATSAPP ===
 def send_whatsapp_message(chat_id, text):
