@@ -14,6 +14,8 @@ SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 BOT_CHAT_ID = os.environ.get("BOT_CHAT_ID")  # Пример: "7775885000@c.us"
+WHATSAPP_INSTANCE_ID = os.environ.get("WHATSAPP_INSTANCE_ID")
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
 
 # ✅ Промпт
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -60,6 +62,20 @@ def ask_openrouter(question, history=[]):
         print("[ERROR] OpenRouter call failed:", e)
         traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
+
+# === WHATSAPP SEND ===
+def send_whatsapp_message(chat_id, message):
+    try:
+        url = f"https://7105.api.greenapi.com/waInstance{WHATSAPP_INSTANCE_ID}/sendMessage/{WHATSAPP_TOKEN}"
+        payload = {
+            "chatId": chat_id,
+            "message": message
+        }
+        response = requests.post(url, json=payload)
+        print("[SEND]", response.status_code, response.text)
+    except Exception:
+        print("[ERROR] WhatsApp message failed:")
+        traceback.print_exc()
 
 # === WHATSAPP WEBHOOK ===
 @app.route("/webhook", methods=["POST"])
@@ -111,8 +127,8 @@ def whatsapp_webhook():
         history.append({"role": "assistant", "content": reply})
         conversation_memory[sender_id] = history
 
-        # ✅ Отправка (пока заглушка)
-        print(f"[REPLY TO WA] {sender_id}: {reply}")
+        # ✅ Отправка через Green API
+        send_whatsapp_message(sender_id, reply)
 
         return jsonify({"status": "ok"}), 200
 
@@ -128,3 +144,4 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
