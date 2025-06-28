@@ -6,29 +6,43 @@ from datetime import datetime
 import pytz
 from dotenv import load_dotenv
 
-# ✅ Загрузка переменных окружения
+# === Загрузка переменных окружения ===
 load_dotenv()
 
-# ✅ Константы
+# === Константы ===
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 BOT_CHAT_ID = os.environ.get("BOT_CHAT_ID")  # Пример: "7775885000@c.us"
-WHATSAPP_INSTANCE_ID = os.environ.get("WHATSAPP_INSTANCE_ID")
-WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN")
+WHATSAPP_INSTANCE_ID = os.getenv("WHATSAPP_INSTANCE_ID")
+WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 
-# ✅ Промпт
+# === Загрузка системного промпта ===
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
     SYSTEM_PROMPT = f.read()
 
-# === Flask app ===
+# === Flask-приложение ===
 app = Flask(__name__)
 
-# === MEMORY ===
+# === Память и кэш ===
 conversation_memory = {}
 processed_whatsapp_ids = set()
 
-# === CALL OPENROUTER ===
+# === Отправка сообщения через Green API ===
+def send_whatsapp_message(chat_id, message):
+    try:
+        url = f"https://7105.api.greenapi.com/waInstance{WHATSAPP_INSTANCE_ID}/sendMessage/{WHATSAPP_TOKEN}"
+        payload = {
+            "chatId": chat_id,
+            "message": message
+        }
+        response = requests.post(url, json=payload)
+        print("[SEND]", response.status_code, response.text)
+    except Exception:
+        print("[ERROR] WhatsApp message failed:")
+        traceback.print_exc()
+
+# === Вызов OpenRouter ===
 def ask_openrouter(question, history=[]):
     try:
         tz = pytz.timezone("Asia/Almaty")
@@ -48,11 +62,15 @@ def ask_openrouter(question, history=[]):
             {"role": "user", "content": full_question},
         ]
 
-        import json
+        payload = {
+            "model": OPENROUTER_MODEL,
+            "messages": messages
+        }
+
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            data=json.dumps({"model": OPENROUTER_MODEL, "messages": messages})
+            json=payload
         )
 
         response.raise_for_status()
@@ -63,44 +81,30 @@ def ask_openrouter(question, history=[]):
         traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
-# === WHATSAPP SEND ===
-def send_whatsapp_message(chat_id, message):
-    try:
-        url = f"https://7105.api.greenapi.com/waInstance{WHATSAPP_INSTANCE_ID}/sendMessage/{WHATSAPP_TOKEN}"
-        payload = {
-            "chatId": chat_id,
-            "message": message
-        }
-        response = requests.post(url, json=payload)
-        print("[SEND]", response.status_code, response.text)
-    except Exception:
-        print("[ERROR] WhatsApp message failed:")
-        traceback.print_exc()
-
-# === WHATSAPP WEBHOOK ===
+# === Webhook для входящих WhatsApp-сообщений ===
 @app.route("/webhook", methods=["POST"])
 def whatsapp_webhook():
     try:
         data = request.get_json(force=True)
         print("[WA WEBHOOK]", data)
 
-        # ✅ Тип хука — фильтр
+        # ✅ Фильтр по типу хука
         type_hook = data.get("typeWebhook")
         if type_hook and type_hook != "incomingMessageReceived":
             print(f"[SKIP] Неподходящий тип хука: {type_hook}")
             return jsonify({"status": "ignored"}), 200
 
-        # ✅ Проверка ID сообщения (анти-спам)
+        # ✅ Проверка ID на повтор
         message_id = data.get("idMessage") or data.get("body", {}).get("idMessage")
         if message_id in processed_whatsapp_ids:
             print(f"[DUPLICATE] Уже обработано: {message_id}")
             return jsonify({"status": "duplicate"}), 200
         processed_whatsapp_ids.add(message_id)
 
-        # ✅ Универсальное извлечение текста
+        # ✅ Извлечение текста
         msg_data = (
             data.get("body", {}).get("messageData", {}) or
-            data.get("messageData", {})  # fallback
+            data.get("messageData", {})
         )
 
         text = None
@@ -119,7 +123,7 @@ def whatsapp_webhook():
             print("[SKIP] Сам себе отправил сообщение.")
             return jsonify({"status": "self-message"}), 200
 
-        # ✅ Вызов ИИ
+        # ✅ Вызов OpenRouter
         history = conversation_memory.get(sender_id, [])[-6:]
         reply = ask_openrouter(text, history)
 
@@ -127,7 +131,7 @@ def whatsapp_webhook():
         history.append({"role": "assistant", "content": reply})
         conversation_memory[sender_id] = history
 
-        # ✅ Отправка через Green API
+        # ✅ Отправка ответа в WhatsApp
         send_whatsapp_message(sender_id, reply)
 
         return jsonify({"status": "ok"}), 200
@@ -136,7 +140,7 @@ def whatsapp_webhook():
         traceback.print_exc()
         return jsonify({"status": "fail"}), 500
 
-# === HEALTH ===
+# === Проверка доступности ===
 @app.route("/", methods=["GET"])
 def root():
     return "TsunamiBot для WhatsApp + OpenRouter запущен ✅"
@@ -144,4 +148,5 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
