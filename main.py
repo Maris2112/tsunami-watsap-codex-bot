@@ -13,7 +13,7 @@ load_dotenv()
 GREENAPI_INSTANCE_ID = os.environ.get("GREENAPI_INSTANCE_ID")
 GREENAPI_TOKEN = os.environ.get("GREENAPI_TOKEN")
 GREENAPI_API_URL = os.environ.get("GREENAPI_API_URL")
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "").strip()
 BOT_CHAT_ID = os.environ.get("BOT_ID")
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 
@@ -32,17 +32,14 @@ def ask_openrouter(question, history=[]):
         now = datetime.now(tz).strftime("%A, %d %B %Y, %H:%M")
         full_question = f"[{now}] {question}"
 
-        # ✅ Очистка ключа от пробелов/переносов (страховка)
-        api_key_clean = OPENROUTER_API_KEY.strip()
-
         headers = {
-            "Authorization": f"Bearer {api_key_clean}",
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
             "X-Title": "Tsunami WhatsApp Bot"
         }
 
-        print("[DEBUG] Headers sent to OpenRouter:", headers)
+        print("[DEBUG] Sending request to OpenRouter...")
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -64,6 +61,14 @@ def ask_openrouter(question, history=[]):
         print("[DEBUG] OpenRouter response text:", response.text)
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
+
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            print("[ERROR] 401 Unauthorized – Проверь OPENROUTER_API_KEY")
+        else:
+            print("[ERROR] HTTP Error:", e)
+        traceback.print_exc()
+        return "⚠️ Ошибка ИИ. Попробуй позже."
 
     except Exception as e:
         print("[ERROR] OpenRouter call failed:", e)
@@ -132,5 +137,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
-
