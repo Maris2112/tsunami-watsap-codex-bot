@@ -46,16 +46,11 @@ def ask_openrouter(question, history=[]):
             {"role": "user", "content": full_question},
         ]
 
-        payload = {
-            "model": OPENROUTER_MODEL,
-            "messages": messages
-        }
-
         import json
         response = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers=headers,
-            data=json.dumps(payload)
+            data=json.dumps({"model": OPENROUTER_MODEL, "messages": messages})
         )
 
         response.raise_for_status()
@@ -73,6 +68,12 @@ def whatsapp_webhook():
         data = request.get_json(force=True)
         print("[WA WEBHOOK]", data)
 
+        # ✅ Тип хука — фильтр
+        type_hook = data.get("typeWebhook")
+        if type_hook and type_hook != "incomingMessageReceived":
+            print(f"[SKIP] Неподходящий тип хука: {type_hook}")
+            return jsonify({"status": "ignored"}), 200
+
         # ✅ Проверка ID сообщения (анти-спам)
         message_id = data.get("idMessage") or data.get("body", {}).get("idMessage")
         if message_id in processed_whatsapp_ids:
@@ -81,25 +82,28 @@ def whatsapp_webhook():
         processed_whatsapp_ids.add(message_id)
 
         # ✅ Универсальное извлечение текста
-        text = (
-            data.get("message") or
-            data.get("body", {}).get("textMessageData", {}).get("textMessage") or
-            data.get("body", {}).get("extendedTextMessageData", {}).get("text") or
-            data.get("messageData", {}).get("textMessageData", {}).get("textMessage") or
-            data.get("messageData", {}).get("extendedTextMessageData", {}).get("text")
+        msg_data = (
+            data.get("body", {}).get("messageData", {}) or
+            data.get("messageData", {})  # fallback
         )
+
+        text = None
+        if "textMessageData" in msg_data:
+            text = msg_data["textMessageData"].get("textMessage")
+        elif "extendedTextMessageData" in msg_data:
+            text = msg_data["extendedTextMessageData"].get("text")
+
         sender_id = data.get("senderData", {}).get("chatId")
 
         if not text or not sender_id:
             print("[SKIP] Пустое сообщение от WhatsApp")
             return jsonify({"status": "no-message"}), 200
 
-        # ✅ Защита от самогенерации
         if sender_id == BOT_CHAT_ID:
             print("[SKIP] Сам себе отправил сообщение.")
             return jsonify({"status": "self-message"}), 200
 
-        # ✅ История и вызов ИИ
+        # ✅ Вызов ИИ
         history = conversation_memory.get(sender_id, [])[-6:]
         reply = ask_openrouter(text, history)
 
@@ -107,7 +111,7 @@ def whatsapp_webhook():
         history.append({"role": "assistant", "content": reply})
         conversation_memory[sender_id] = history
 
-        # ✅ Отправка через Green API (замени на реальный запрос!)
+        # ✅ Отправка (пока заглушка)
         print(f"[REPLY TO WA] {sender_id}: {reply}")
 
         return jsonify({"status": "ok"}), 200
@@ -124,5 +128,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
-
