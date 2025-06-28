@@ -1,6 +1,19 @@
+# Python
 __pycache__/
 *.py[cod]
-.env
-venv/
-.vscode/
 *.log
+
+# Secrets
+.env
+.env.*
+
+# Editor settings
+.vscode/
+.idea/
+
+# Virtual env
+venv/
+
+# DB files (если будут)
+*.db
+*.sqlite3
