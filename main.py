@@ -32,8 +32,11 @@ def ask_openrouter(question, history=[]):
         now = datetime.now(tz).strftime("%A, %d %B %Y, %H:%M")
         full_question = f"[{now}] {question}"
 
+        # ✅ Очистка ключа от пробелов/переносов (страховка)
+        api_key_clean = OPENROUTER_API_KEY.strip()
+
         headers = {
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Authorization": f"Bearer {api_key_clean}",
             "Content-Type": "application/json",
             "HTTP-Referer": "https://tsunami-whatsapp.up.railway.app",
             "X-Title": "Tsunami WhatsApp Bot"
@@ -66,6 +69,7 @@ def ask_openrouter(question, history=[]):
         print("[ERROR] OpenRouter call failed:", e)
         traceback.print_exc()
         return "⚠️ Ошибка ИИ. Попробуй позже."
+
 
 # === SEND WHATSAPP ===
 def send_whatsapp_message(chat_id, text):
