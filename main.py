@@ -104,6 +104,11 @@ def whatsapp_webhook():
         history = conversation_memory.get(sender_id, [])[-6:]
         reply = ask_openrouter(message, history)
 
+        # 🛡️ Защита от цикла, если OpenRouter вернул fallback
+        if reply.strip().startswith("⚠️ Ошибка"):
+            print("[BLOCKED] Fallback response detected. Not sending to avoid loop.")
+            return jsonify({"status": "ai-fallback-blocked"}), 200
+
         history.append({"role": "user", "content": message})
         history.append({"role": "assistant", "content": reply})
         conversation_memory[sender_id] = history
@@ -123,4 +128,5 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
 
