@@ -67,7 +67,7 @@ def ask_openrouter(question, history=[]):
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
 # === WHATSAPP WEBHOOK ===
-@app.route("/webhook", methods=["POST"])  # ⬅️ ВОТ ТУТ ГЛАВНОЕ ИЗМЕНЕНИЕ
+@app.route("/webhook", methods=["POST"])
 def whatsapp_webhook():
     try:
         data = request.get_json(force=True)
@@ -81,7 +81,13 @@ def whatsapp_webhook():
         processed_whatsapp_ids.add(message_id)
 
         # ✅ Извлечение текста и ID
-        text = data.get("message") or data.get("body", {}).get("textMessageData", {}).get("textMessage")
+        msg_data = data.get("body", {}).get("messageData", {})
+        text = None
+        if "textMessageData" in msg_data:
+            text = msg_data["textMessageData"].get("textMessage")
+        elif "extendedTextMessageData" in msg_data:
+            text = msg_data["extendedTextMessageData"].get("text")
+
         sender_id = data.get("senderData", {}).get("chatId")
 
         if not text or not sender_id:
