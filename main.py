@@ -80,14 +80,14 @@ def whatsapp_webhook():
             return jsonify({"status": "duplicate"}), 200
         processed_whatsapp_ids.add(message_id)
 
-        # ✅ Извлечение текста и ID
-        msg_data = data.get("body", {}).get("messageData", {})
-        text = None
-        if "textMessageData" in msg_data:
-            text = msg_data["textMessageData"].get("textMessage")
-        elif "extendedTextMessageData" in msg_data:
-            text = msg_data["extendedTextMessageData"].get("text")
-
+        # ✅ Универсальное извлечение текста
+        text = (
+            data.get("message") or
+            data.get("body", {}).get("textMessageData", {}).get("textMessage") or
+            data.get("body", {}).get("extendedTextMessageData", {}).get("text") or
+            data.get("messageData", {}).get("textMessageData", {}).get("textMessage") or
+            data.get("messageData", {}).get("extendedTextMessageData", {}).get("text")
+        )
         sender_id = data.get("senderData", {}).get("chatId")
 
         if not text or not sender_id:
