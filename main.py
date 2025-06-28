@@ -13,6 +13,7 @@ load_dotenv()
 SYSTEM_PROMPT_PATH = os.environ.get("SYSTEM_PROMPT_PATH", "system_prompt.txt")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemini-flash-1.5")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+BOT_CHAT_ID = os.environ.get("BOT_CHAT_ID")  # Пример: "7775885000@c.us"
 
 # ✅ Промпт
 with open(SYSTEM_PROMPT_PATH, "r", encoding="utf-8") as f:
@@ -87,6 +88,11 @@ def whatsapp_webhook():
             print("[SKIP] Пустое сообщение от WhatsApp")
             return jsonify({"status": "no-message"}), 200
 
+        # ✅ Защита от самогенерации
+        if sender_id == BOT_CHAT_ID:
+            print("[SKIP] Сам себе отправил сообщение.")
+            return jsonify({"status": "self-message"}), 200
+
         # ✅ История и вызов ИИ
         history = conversation_memory.get(sender_id, [])[-6:]
         reply = ask_openrouter(text, history)
@@ -112,3 +118,4 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
+
