@@ -67,7 +67,7 @@ def ask_openrouter(question, history=[]):
         return "⚠️ Ошибка ИИ. Попробуй позже."
 
 # === WHATSAPP WEBHOOK ===
-@app.route("/whatsapp", methods=["POST"])
+@app.route("/webhook", methods=["POST"])  # ⬅️ ИМЕННО ТАК ДОЛЖНО БЫТЬ
 def whatsapp_webhook():
     try:
         data = request.get_json(force=True)
@@ -118,4 +118,3 @@ def root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
-
