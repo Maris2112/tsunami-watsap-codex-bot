@@ -36,7 +36,6 @@ ALMATY = pytz.timezone("Asia/Almaty")
 
 conversation_memory = {}
 processed_ids = set()
-booking_state = {}
 user_lang = {}
 seen = set()                # chat_ids we've already greeted (show menu on first contact)
 
@@ -45,9 +44,8 @@ GREET_WORDS = ("привет", "приветик", "здравствуй", "зд
                "хай", "ассалам", "ассалаумағалейкум", "салам", "салем", "сәлем",
                "сәлеметсіз", "сәлеметсіңіз", "hi", "hello", "hey", "start", "начать")
 CANCEL_WORDS = ("отмена", "cancel", "стоп", "болдырмау", "тоқта")
-WHEEL_WORDS = ("колесо", "wheel", "колесо фортуны", "сәттілік дөңгелегі", "fortune")
 MENU_ACTIONS = {"1": "prices", "2": "hours", "3": "location", "4": "bar",
-                "5": "booking", "6": "wheel", "7": "admin"}
+                "5": "booking", "6": "admin"}
 
 
 # ===================== Helpers =====================
@@ -142,99 +140,7 @@ def menu_action(chat_id, key):
     elif key == "admin":
         ga_send(chat_id, f"📞 +7 777 719 5000\nhttps://wa.me/{ADMIN_PHONE}")
     elif key == "booking":
-        start_booking(chat_id)
-    elif key == "wheel":
-        do_spin(chat_id)
-
-
-# ===================== Wheel =====================
-def do_spin(chat_id):
-    lang = L(chat_id)
-    did = db_id(chat_id)
-    if not db.can_spin_today(did):
-        ga_send(chat_id, i18n.t(lang, "w_already")); return
-    idx = random.choices(range(len(i18n.PRIZES)), weights=[p["w"] for p in i18n.PRIZES], k=1)[0]
-    p = i18n.PRIZES[idx]
-    db.record_spin(did, p["key"])
-    label = p.get(lang) or p["ru"]
-    if not p["real"]:
-        ga_send(chat_id, i18n.t(lang, "w_lose", prize=label)); return
-    code = "".join(random.choices("ABCDEFGHJKLMNPQRSTUVWXYZ23456789", k=6))
-    today = datetime.now(ALMATY).date()
-    db.create_prize(code, did, p["key"], p["ru"], p["role"], today)
-    deeplink = f"https://t.me/{BOT_USERNAME}?start=rdm_{code}"
-    qr = "https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=" + requests.utils.quote(deeplink, safe="")
-    who = i18n.t(lang, "redeem_cashier" if p["role"] == "cashier" else "redeem_entrance")
-    ga_send_file(chat_id, qr, i18n.t(lang, "w_win_qr", prize=label, who=who, code=code))
-
-
-# ===================== Booking (text wizard) =====================
-def start_booking(chat_id):
-    booking_state[chat_id] = {"step": "date", "data": {}}
-    ga_send(chat_id, i18n.t(L(chat_id), "bk1") + "\n(сегодня / завтра / 25.06)")
-
-
-def _norm_zone(t):
-    t = t.lower()
-    if "vip" in t and ("2" in t or "ii" in t):
-        return "VIP 2"
-    if "vip" in t and ("1" in t or "i" in t):
-        return "VIP 1"
-    return "Standard"
-
-
-def booking_finish(chat_id):
-    lang = L(chat_id)
-    T = i18n.t
-    d = booking_state[chat_id]["data"]
-    summary = (f"{T(lang,'sum_date')}: {d.get('date','—')}\n"
-               f"{T(lang,'sum_zone')}: {d.get('zone','—')}\n"
-               f"{T(lang,'sum_people')}: {d.get('people','—')}\n"
-               f"{T(lang,'sum_name')}: {d.get('name','—')}\n"
-               f"{T(lang,'sum_phone')}: {d.get('phone','—')}")
-    done = {"ru": "✅ Заявка принята! Администратор свяжется с тобой 👍",
-            "kk": "✅ Өтінім қабылданды! Әкімші сізбен хабарласады 👍",
-            "en": "✅ Request received! The administrator will contact you 👍"}[lang]
-    ga_send(chat_id, done + "\n\n" + summary)
-    db.save_contact(db_id(chat_id), d.get("name"), d.get("phone"), source="booking_whatsapp",
-                    extra=f"date={d.get('date')}; zone={d.get('zone')}; people={d.get('people')}; wa={chat_id}")
-    ga_send(f"{ADMIN_PHONE}@c.us", "🆕 Новая бронь из WhatsApp-бота:\n" + summary + f"\nWhatsApp: {chat_id}")
-    booking_state.pop(chat_id, None)
-
-
-def handle_booking_text(chat_id, text):
-    lang = L(chat_id)
-    if text.strip().lower() in CANCEL_WORDS:
-        booking_state.pop(chat_id, None)
-        ga_send(chat_id, i18n.t(lang, "bk_cancelled")); return
-    st = booking_state[chat_id]
-    step = st["step"]
-    low = text.strip().lower()
-    if step == "date":
-        today = datetime.now(ALMATY)
-        if low in ("сегодня", "today", "бүгін"):
-            st["data"]["date"] = today.strftime("%d.%m.%Y")
-        elif low in ("завтра", "tomorrow", "ертең"):
-            st["data"]["date"] = (today + timedelta(days=1)).strftime("%d.%m.%Y")
-        else:
-            st["data"]["date"] = text.strip()
-        st["step"] = "zone"
-        ga_send(chat_id, i18n.t(lang, "bk2") + "\n(Standard / VIP1 / VIP2)")
-    elif step == "zone":
-        st["data"]["zone"] = _norm_zone(text)
-        st["step"] = "people"
-        ga_send(chat_id, i18n.t(lang, "bk3"))
-    elif step == "people":
-        st["data"]["people"] = text.strip()
-        st["step"] = "name"
-        ga_send(chat_id, i18n.t(lang, "bk4"))
-    elif step == "name":
-        st["data"]["name"] = text.strip()
-        st["step"] = "phone"
-        ga_send(chat_id, i18n.t(lang, "bk5"))
-    elif step == "phone":
-        st["data"]["phone"] = text.strip()
-        booking_finish(chat_id)
+        ga_send(chat_id, i18n.t(lang, "book_call"))
 
 
 # ===================== Webhook =====================
@@ -275,20 +181,11 @@ def whatsapp_webhook():
         words = re.sub(r"[^\w\s]", " ", low).split()
         is_greet = bool(words) and words[0] in GREET_WORDS
 
-        if low in MENU_WORDS:                      # explicit "меню" always escapes booking
-            booking_state.pop(sender_id, None)
+        if low in MENU_WORDS:                      # explicit "меню" shows the menu
             send_menu(sender_id)
             return jsonify({"status": "ok"}), 200
-        if (first_contact or is_greet) and sender_id not in booking_state:
+        if first_contact or is_greet:
             send_menu(sender_id)
-            return jsonify({"status": "ok"}), 200
-
-        if sender_id in booking_state:
-            handle_booking_text(sender_id, body)
-            return jsonify({"status": "ok"}), 200
-
-        if low in WHEEL_WORDS:
-            do_spin(sender_id)
             return jsonify({"status": "ok"}), 200
 
         if body in MENU_ACTIONS:
